@@ -208,7 +208,7 @@ static int mmc_runtime_suspend(struct device *dev)
 	struct mmc_card *card = mmc_dev_to_card(dev);
 	struct mmc_host *host = card->host;
 
-	return 0;
+	return host->bus_ops->runtime_suspend(host);
 }
 
 static int mmc_runtime_resume(struct device *dev)
@@ -216,7 +216,7 @@ static int mmc_runtime_resume(struct device *dev)
 	struct mmc_card *card = mmc_dev_to_card(dev);
 	struct mmc_host *host = card->host;
 
-	return 0;
+	return host->bus_ops->runtime_suspend(host);
 }
 #endif /* !CONFIG_PM */
 
