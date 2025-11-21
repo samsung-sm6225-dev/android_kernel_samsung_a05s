@@ -35,7 +35,7 @@ static struct qmi_handle *mem_share_svc_handle;
 static uint64_t bootup_request;
 
 #ifdef CONFIG_CP_DYNAMIC_MEM_RESERVE
-extern sec_reserved_mem(void);
+extern int sec_reserved_mem(void);
 #define RESERVE_MEM_LEVEL1_MASK (1u << 2)
 #define RESERVE_MEM_LEVEL2_MASK (1u << 3)
 #endif
