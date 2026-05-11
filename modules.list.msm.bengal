@@ -93,3 +93,4 @@ pdr_interface.ko
 qmi_helpers.ko
 slimbus.ko
 qcom-pmu-lib.ko
+
