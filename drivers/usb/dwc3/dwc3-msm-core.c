@@ -5107,6 +5107,20 @@ static ssize_t mode_store(struct device *dev, struct device_attribute *attr,
 	else if (sysfs_streq(buf, "host"))
 		role = USB_ROLE_HOST;
 
+#ifdef CONFIG_USB_NOTIFIER
+	if (role == USB_ROLE_DEVICE) {
+		if (is_blocked(get_otg_notify(), NOTIFY_BLOCK_TYPE_CLIENT)) {
+			dev_err(dev, "blocked peripheral mode\n");
+			return -EINVAL;
+		}
+	} else if (role == USB_ROLE_HOST) {
+		if (is_blocked(get_otg_notify(), NOTIFY_BLOCK_TYPE_HOST)) {
+			dev_err(dev, "blocked host mode\n");
+			return -EINVAL;
+		}
+	}
+#endif
+
 	dbg_log_string("mode_request:%s\n", usb_role_string(role));
 	ret = dwc3_msm_set_role(mdwc, role);
 	if (ret < 0)
@@ -6774,7 +6788,8 @@ static int dwc3_msm_host_notifier(struct notifier_block *nb,
 		/* USB root hub device */
 		if (event == USB_DEVICE_ADD) {
 			pm_runtime_use_autosuspend(&udev->dev);
-			pm_runtime_set_autosuspend_delay(&udev->dev, 1000);
+			pm_runtime_set_autosuspend_delay(&udev->dev, 2000);
+			pr_err("%s ---> pm_runtime_set_autosuspend_delay",__func__);
 		}
 	}
 

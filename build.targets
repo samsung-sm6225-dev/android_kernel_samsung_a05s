@@ -10,8 +10,10 @@ build.config.msm.gen3auto.lxc
 build.config.msm.gen4auto.lxc
 build.config.msm.bengal
 build.config.msm.bengal.le
+build.config.msm.m269
 build.config.msm.monaco
 build.config.msm.kona
 build.config.msm.kona.le
 build.config.msm.qcs405
 build.config.msm.trinket
+build.config.msm.m269.sec

@@ -332,7 +332,7 @@ int hgsl_isync_timeline_create(struct hgsl_priv *priv,
 		timeline->id = idr;
 		*timeline_id = idr;
 		ret = 0;
-	}
+	}	
 	spin_unlock(&hgsl->isync_timeline_lock);
 	idr_preload_end();
 

@@ -1873,6 +1873,12 @@ int32_t npu_host_exec_network_v2(struct npu_client *client,
 		goto exec_v2_done;
 	}
 
+	if (network->is_executing) {
+		pr_err("network is already in execution\n");
+		ret = -EINVAL;
+		goto exec_v2_done;
+	}
+
 	pr_debug("execute_v2 network %lld\n", network->id);
 	num_patch_params = exec_ioctl->patch_buf_info_num;
 	pkt_size = num_patch_params * sizeof(struct npu_patch_params_v2) +

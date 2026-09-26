@@ -908,6 +908,15 @@ static void gi2c_ev_cb(struct dma_chan *ch, struct msm_gpi_cb const *cb_str,
 		break;
 	case MSM_GPI_QUP_NOTIFY:
 	case MSM_GPI_QUP_CH_ERROR:
+		if (m_stat & M_GP_IRQ_1_EN) {
+			if (readl_relaxed(gi2c->base + SE_GENI_M_GP_LENGTH)) {
+				/* only process for write operation. */
+				if (!(gi2c->cur->flags & I2C_M_RD))
+					geni_i2c_err(gi2c, I2C_DATA_NACK);
+			} else {
+				geni_i2c_err(gi2c, I2C_ADDR_NACK);
+			}
+		}
 		if (m_stat & M_GP_IRQ_1_EN)
 			geni_i2c_check_addr_data_nack(gi2c, gi2c->cur->flags);
 		if (m_stat & M_GP_IRQ_3_EN)
@@ -2170,7 +2179,7 @@ static int geni_i2c_xfer(struct i2c_adapter *adap,
 		/* Ensure FIFO write go through before waiting for Done evet */
 		mb();
 		timeout = wait_for_completion_timeout(&gi2c->xfer,
-						gi2c->xfer_timeout);
+						(gi2c->xfer_timeout*5));
 		if (!timeout) {
 			u32 geni_ios = 0;
 			u32 m_stat = readl_relaxed(gi2c->base + SE_GENI_M_IRQ_STATUS);
