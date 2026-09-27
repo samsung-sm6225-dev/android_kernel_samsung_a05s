@@ -1990,13 +1990,6 @@ static ssize_t debug_mask_store(struct device *device,
 
 static DEVICE_ATTR_RW(debug_mask);
 
-static void qcom_slim_ngd_unregister(struct qcom_slim_ngd_ctrl *ctrl)
-{
-	struct qcom_slim_ngd *ngd = ctrl->ngd;
-
-	platform_device_del(ngd->pdev);
-}
-
 static int qcom_slim_ngd_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
