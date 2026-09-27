@@ -58,6 +58,7 @@ struct qcom_rproc_ssr {
 	struct qcom_ssr_subsystem *info;
 };
 
+<<<<<<< HEAD
 extern bool qcom_device_shutdown_in_progress;
 
 typedef void (*rproc_dumpfn_t)(struct rproc *rproc, struct rproc_dump_segment *segment,
@@ -67,6 +68,12 @@ void qcom_minidump(struct rproc *rproc, struct device *md_dev,
 			unsigned int minidump_id, rproc_dumpfn_t dumpfn);
 
 int qcom_rproc_toggle_load_state(struct qmp *qmp, const char *name, bool enable);
+=======
+void qcom_minidump(struct rproc *rproc, unsigned int minidump_id,
+			void (*rproc_dumpfn_t)(struct rproc *rproc,
+				struct rproc_dump_segment *segment, void *dest, size_t offset,
+				size_t size));
+>>>>>>> dae71b3e42755a256c51d1b9f6101d50f08f21ec
 
 void qcom_add_glink_subdev(struct rproc *rproc, struct qcom_rproc_glink *glink,
 			   const char *ssr_name);

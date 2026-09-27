@@ -137,11 +137,17 @@ static void qcom_minidump_cleanup(struct rproc *rproc)
 }
 
 static int qcom_add_minidump_segments(struct rproc *rproc, struct minidump_subsystem *subsystem,
+<<<<<<< HEAD
 				      rproc_dumpfn_t dumpfn)
+=======
+			void (*rproc_dumpfn_t)(struct rproc *rproc, struct rproc_dump_segment *segment,
+				void *dest, size_t offset, size_t size))
+>>>>>>> dae71b3e42755a256c51d1b9f6101d50f08f21ec
 {
 	struct minidump_region __iomem *ptr;
 	struct minidump_region region;
 	int seg_cnt, i;
+	int ret = 0;
 	dma_addr_t da;
 	size_t size;
 	char *name, *dbg_buf_name = "md_dbg_buf";
@@ -160,13 +166,14 @@ static int qcom_add_minidump_segments(struct rproc *rproc, struct minidump_subsy
 
 	for (i = 0; i < seg_cnt; i++) {
 		memcpy_fromio(&region, ptr + i, sizeof(region));
-		if (region.valid == MD_REGION_VALID) {
-			name = kstrdup(region.name, GFP_KERNEL);
+		if (le32_to_cpu(region.valid) == MD_REGION_VALID) {
+			name = kstrndup(region.name, MAX_REGION_NAME_LENGTH - 1, GFP_KERNEL);
 			if (!name) {
-				iounmap(ptr);
-				return -ENOMEM;
+				ret = -ENOMEM;
+				break;
 			}
 			da = le64_to_cpu(region.address);
+<<<<<<< HEAD
 			size = le32_to_cpu(region.size);
 			if (le32_to_cpu(subsystem->encryption_status) != MD_SS_ENCR_DONE) {
 				if (!i && len < MAX_REGION_NAME_LENGTH &&
@@ -176,13 +183,23 @@ static int qcom_add_minidump_segments(struct rproc *rproc, struct minidump_subsy
 				break;
 			}
 			rproc_coredump_add_custom_segment(rproc, da, size, dumpfn, name);
+=======
+			size = le64_to_cpu(region.size);
+			ret = rproc_coredump_add_custom_segment(rproc, da, size, rproc_dumpfn_t,
+								name);
+			if (ret) {
+				kfree(name);
+				break;
+			}
+>>>>>>> dae71b3e42755a256c51d1b9f6101d50f08f21ec
 		}
 	}
 
 	iounmap(ptr);
-	return 0;
+	return ret;
 }
 
+<<<<<<< HEAD
 static void qcom_rproc_minidump(struct rproc *rproc, struct device *md_dev)
 {
 	struct rproc_dump_segment *segment;
@@ -302,6 +319,12 @@ EXPORT_SYMBOL(qcom_rproc_toggle_load_state);
 
 void qcom_minidump(struct rproc *rproc, struct device *md_dev,
 				unsigned int minidump_id, rproc_dumpfn_t dumpfn)
+=======
+void qcom_minidump(struct rproc *rproc, unsigned int minidump_id,
+		void (*rproc_dumpfn_t)(struct rproc *rproc,
+		struct rproc_dump_segment *segment, void *dest, size_t offset,
+		size_t size))
+>>>>>>> dae71b3e42755a256c51d1b9f6101d50f08f21ec
 {
 	int ret;
 	struct minidump_subsystem *subsystem;
@@ -329,12 +352,16 @@ void qcom_minidump(struct rproc *rproc, struct device *md_dev,
 		return rproc_coredump(rproc);
 	}
 
+<<<<<<< HEAD
 	if (le32_to_cpu(subsystem->encryption_status) != MD_SS_ENCR_DONE)
 		dev_err(&rproc->dev, "encryption_status != MD_SS_ENCR_DONE\n");
 
 	rproc_coredump_cleanup(rproc);
 
 	ret = qcom_add_minidump_segments(rproc, subsystem, dumpfn);
+=======
+	ret = qcom_add_minidump_segments(rproc, subsystem, rproc_dumpfn_t);
+>>>>>>> dae71b3e42755a256c51d1b9f6101d50f08f21ec
 	if (ret) {
 		dev_err(&rproc->dev, "Failed with error: %d while adding minidump entries\n", ret);
 		goto clean_minidump;
