@@ -388,38 +388,37 @@ static void sdhci_msm_v5_variant_writel_relaxed(u32 val,
 	writel_relaxed(val, host->ioaddr + offset);
 }
 
-static unsigned int msm_get_clock_mult_for_bus_mode(struct sdhci_host *host,
-						    unsigned int clock,
-						    unsigned int timing)
+static unsigned int msm_get_clock_mult_for_bus_mode(struct sdhci_host *host)
 {
+	struct mmc_ios ios = host->mmc->ios;
 	/*
 	 * The SDHC requires internal clock frequency to be double the
 	 * actual clock that will be set for DDR mode. The controller
 	 * uses the faster clock(100/400MHz) for some of its parts and
 	 * send the actual required clock (50/200MHz) to the card.
 	 */
-	if (timing == MMC_TIMING_UHS_DDR50 ||
-	    timing == MMC_TIMING_MMC_DDR52 ||
-	    (timing == MMC_TIMING_MMC_HS400 &&
-	    clock == MMC_HS200_MAX_DTR) ||
+	if (ios.timing == MMC_TIMING_UHS_DDR50 ||
+	    ios.timing == MMC_TIMING_MMC_DDR52 ||
+	    (ios.timing == MMC_TIMING_MMC_HS400 &&
+	    ios.clock == MMC_HS200_MAX_DTR) ||
 	    host->flags & SDHCI_HS400_TUNING)
 		return 2;
 	return 1;
 }
 
 static void msm_set_clock_rate_for_bus_mode(struct sdhci_host *host,
-					    unsigned int clock,
-					    unsigned int timing)
+					    unsigned int clock)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
+	struct mmc_ios curr_ios = host->mmc->ios;
 	struct clk *core_clk = msm_host->bulk_clks[0].clk;
 	unsigned long achieved_rate;
 	unsigned int desired_rate;
 	unsigned int mult;
 	int rc;
 
-	mult = msm_get_clock_mult_for_bus_mode(host, clock, timing);
+	mult = msm_get_clock_mult_for_bus_mode(host);
 	desired_rate = clock * mult;
 
 	if (curr_ios.timing == MMC_TIMING_SD_HS &&
@@ -429,7 +428,8 @@ static void msm_set_clock_rate_for_bus_mode(struct sdhci_host *host,
 	rc = dev_pm_opp_set_rate(mmc_dev(host->mmc), desired_rate);
 	if (rc) {
 		pr_err("%s: Failed to set clock at rate %u at timing %d\n",
-		       mmc_hostname(host->mmc), desired_rate, timing);
+		       mmc_hostname(host->mmc), desired_rate,
+		       curr_ios.timing);
 		return;
 	}
 
@@ -446,7 +446,10 @@ static void msm_set_clock_rate_for_bus_mode(struct sdhci_host *host,
 	msm_host->clk_rate = desired_rate;
 
 	pr_debug("%s: Setting clock at rate %lu at timing %d\n",
-		 mmc_hostname(host->mmc), achieved_rate, timing);
+		 mmc_hostname(host->mmc), achieved_rate,
+		 curr_ios.timing);
+	sdhci_msm_log_str(msm_host, "Setting clock at rate %lu at timing %d\n",
+			clk_get_rate(core_clk), curr_ios.timing);
 }
 
 /* Platform specific tuning */
@@ -1360,12 +1363,14 @@ static int sdhci_msm_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	struct sdhci_host *host = mmc_priv(mmc);
 	int tuning_seq_cnt = 10;
 	u8 phase, tuned_phases[16], tuned_phase_cnt = 0;
-	int rc;
+	int rc = 0;
+	u32 config;
 	struct mmc_ios ios = host->mmc->ios;
+	u32 core_vendor_spec;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
-	const struct sdhci_msm_offset *msm_offset = msm_host->offset;
-	u32 config;
+	const struct sdhci_msm_offset *msm_offset =
+					sdhci_priv_msm_offset(host);
 
 	if (!sdhci_msm_is_tuning_needed(host)) {
 		msm_host->use_cdr = false;
@@ -1383,10 +1388,17 @@ static int sdhci_msm_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	msm_host->tuning_done = 0;
 
 	if (ios.timing == MMC_TIMING_UHS_SDR50 &&
-	    host->flags & SDHCI_SDR50_NEEDS_TUNING) {
+			host->flags & SDHCI_SDR50_NEEDS_TUNING) {
+		/*
+		 * Bit1 SDHCI_CTRL_UHS_SDR50 of the Host Control 2 register is
+		 * already set by the sdhci_set_ios -> sdhci_msm_set_uhs_signaling().
+		 * It is not necessary to set it again here.
+		 */
+
 		config = readl_relaxed(host->ioaddr + msm_offset->core_vendor_spec);
+		config |= CORE_HC_SELECT_IN_EN;
 		config &= ~CORE_HC_SELECT_IN_MASK;
-		config |= CORE_HC_SELECT_IN_EN | CORE_HC_SELECT_IN_SDR50;
+		config |= CORE_HC_SELECT_IN_SDR50;
 		writel_relaxed(config, host->ioaddr + msm_offset->core_vendor_spec);
 	}
 
@@ -1397,7 +1409,7 @@ static int sdhci_msm_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	 */
 	if (host->flags & SDHCI_HS400_TUNING) {
 		sdhci_msm_hc_select_mode(host);
-		msm_set_clock_rate_for_bus_mode(host, ios.clock, ios.timing);
+		msm_set_clock_rate_for_bus_mode(host, ios.clock);
 		host->flags &= ~SDHCI_HS400_TUNING;
 	}
 
@@ -1451,7 +1463,7 @@ retry:
 		rc = msm_find_most_appropriate_phase(host, tuned_phases,
 						     tuned_phase_cnt);
 		if (rc < 0)
-			return rc;
+			goto out;
 		else
 			phase = rc;
 
@@ -1479,6 +1491,16 @@ retry:
 
 	if (!rc)
 		msm_host->tuning_done = true;
+out:
+
+	/* Set PWRSAVE bit to '1' after completion of tuning as needed */
+	if (core_vendor_spec & CORE_CLK_PWRSAVE) {
+		writel_relaxed((readl_relaxed(host->ioaddr +
+			msm_offset->core_vendor_spec)
+			| CORE_CLK_PWRSAVE), host->ioaddr +
+			msm_offset->core_vendor_spec);
+	}
+
 	return rc;
 }
 
@@ -1946,7 +1968,6 @@ static void sdhci_msm_check_power_status(struct sdhci_host *host, u32 req_type)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
-	struct mmc_host *mmc = host->mmc;
 	bool done = false;
 	u32 val = SWITCHABLE_SIGNALING_VOLTAGE;
 	const struct sdhci_msm_offset *msm_offset =
@@ -2363,7 +2384,8 @@ static int sdhci_msm_vreg_init(struct device *dev,
 	}
 	if (curr_vdd_io_reg) {
 		ret = sdhci_msm_vreg_init_reg(dev, curr_vdd_io_reg);
-
+		if (ret)
+			goto out;
 		/* In eMMC case vdd-io might be a fixed 1.8V regulator */
 		if (mmc->caps & MMC_CAP_NONREMOVABLE &&
 			!regulator_is_supported_voltage(curr_vdd_io_reg->reg,
@@ -2704,7 +2726,6 @@ static void sdhci_msm_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
-	struct mmc_ios ios = host->mmc->ios;
 
 	if (!clock) {
 		host->mmc->actual_clock = msm_host->clk_rate = 0;
@@ -2713,7 +2734,7 @@ static void sdhci_msm_set_clock(struct sdhci_host *host, unsigned int clock)
 
 	sdhci_msm_hc_select_mode(host);
 
-	msm_set_clock_rate_for_bus_mode(host, ios.clock, ios.timing);
+	msm_set_clock_rate_for_bus_mode(host, clock);
 out:
 	/* Vote on bus only with clock frequency or when changing clock
 	 * frequency. No need to vote when setting clock frequency as 0
@@ -3754,7 +3775,7 @@ static void sdhci_msm_reset(struct sdhci_host *host, u8 mask)
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
 
-	if ((host->mmc->caps2 & MMC_CAP2_CQE) && (mask & SDHCI_RESET_ALL))
+	if ((host->mmc) && (host->mmc->caps2 & MMC_CAP2_CQE) && (mask & SDHCI_RESET_ALL))
 		cqhci_deactivate(host->mmc);
 
 	if (msm_host->rst_n_disable && host->mmc && host->mmc->card &&
@@ -4488,9 +4509,9 @@ static void sdhci_msm_qos_init(struct sdhci_msm_host *msm_host)
 	struct sdhci_msm_qos_req *qr;
 	struct qos_cpu_group *qcg;
 
-	cpumask_t silver_mask;
-	cpumask_t gold_mask;
-	cpumask_t gold_prime_mask;
+	cpumask_t silver_mask = CPU_MASK_NONE;
+	cpumask_t gold_mask = CPU_MASK_NONE;
+	cpumask_t gold_prime_mask = CPU_MASK_NONE;
 	int cid_cpu[MAX_NUM_CLUSTERS] = {-1, -1, -1};
 	int cid = -1;
 	int prev_cid = -1;

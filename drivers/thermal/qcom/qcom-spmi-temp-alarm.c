@@ -437,7 +437,7 @@ static int qpnp_tm_update_critical_trip_temp(struct qpnp_tm_chip *chip,
 		case 0x0002:
 		case 0x0100:
 		case 0x0101:
-			require_s2_shutdown = true;
+			chip->require_stage2_shutdown = true;
 			break;
 		}
 	}
@@ -814,6 +814,7 @@ static int qpnp_tm_probe(struct platform_device *pdev)
 		ret = qpnp_tm_temp_lite_init(chip);
 		if (ret < 0)
 			return ret;
+	}
 
 	if (chip->subtype == QPNP_TM_SUBTYPE_GEN2) {
 		dig_revision = (dig_major << 8) | dig_minor;

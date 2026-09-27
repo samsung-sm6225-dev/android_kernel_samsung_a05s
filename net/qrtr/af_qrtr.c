@@ -431,7 +431,6 @@ static void __qrtr_node_release(struct kref *kref)
 	struct qrtr_tx_flow *flow;
 	unsigned long flags;
 	void __rcu **slot;
-	unsigned long index;
 
 	spin_lock_irqsave(&qrtr_nodes_lock, flags);
 	/* If the node is a bridge for other nodes, there are possibly
